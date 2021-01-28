@@ -297,6 +297,9 @@ void SerialConnection::receive()
 #if defined(LINUX) || defined(APPLE)
         int pollrc = poll(fds, 1, 1000);
         if (pollrc == 0 || !(fds[0].revents & POLLIN)) {
+// #define POLLERR 0x008 /* Error condition. */
+// #define POLLHUP 0x010 /* Hung up. */
+// #define POLLNVAL 0x020 /* Invalid polling request. */
             continue;
         } else if (pollrc == -1) {
             LogErr() << "read poll failure: " << GET_ERROR();
@@ -308,7 +311,13 @@ void SerialConnection::receive()
         }
 #else
         if (!ReadFile(_handle, buffer, sizeof(buffer), LPDWORD(&recv_len), NULL)) {
-            LogErr() << "ReadFile failure: " << GET_ERROR();
+            DWORD last_error = GetLastError();
+            LogErr() << "ReadFile failure: " << last_error  << GET_ERROR();
+            if(last_error == ERROR_OPERATION_ABORTED
+            || last_error == ERROR_DEVICE_NOT_CONNECTED)  // disconnected ?
+            {
+                _should_exit = true;
+            }
             continue;
         }
 #endif
